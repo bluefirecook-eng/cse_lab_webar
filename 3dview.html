@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSE Lab - Blender 3D Viewer</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: Arial, sans-serif;
+    }
+
+    #info {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 10;
+      color: white;
+      background: rgba(0, 0, 0, 0.65);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+      background: #111;
+      z-index: 20;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="loading">Loading CSE Lab...</div>
+
+<div id="info">
+  <b>CSE Lab 3D View</b><br>
+  🖱️ Left drag: Rotate<br>
+  🖱️ Right drag: Pan<br>
+  🖱️ Scroll: Zoom
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+
+import * as THREE from "three";
+
+import { OrbitControls }
+  from "three/addons/controls/OrbitControls.js";
+
+import { GLTFLoader }
+  from "three/addons/loaders/GLTFLoader.js";
+
+
+// ------------------------------------
+// Scene
+// ------------------------------------
+
+const scene = new THREE.Scene();
+
+scene.background = new THREE.Color(0x20252b);
+
+
+// ------------------------------------
+// Camera
+// ------------------------------------
+
+const camera = new THREE.PerspectiveCamera(
+  45,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  5000
+);
+
+camera.position.set(8, 6, 10);
+
+
+// ------------------------------------
+// Renderer
+// ------------------------------------
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true
+});
+
+renderer.setSize(
+  window.innerWidth,
+  window.innerHeight
+);
+
+renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio, 2)
+);
+
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+renderer.shadowMap.enabled = true;
+
+document.body.appendChild(renderer.domElement);
+
+
+// ------------------------------------
+// Controls
+// ------------------------------------
+
+const controls = new OrbitControls(
+  camera,
+  renderer.domElement
+);
+
+controls.enableDamping = true;
+
+controls.dampingFactor = 0.05;
+
+controls.target.set(0, 1, 0);
+
+
+// ------------------------------------
+// Lights
+// ------------------------------------
+
+const ambientLight = new THREE.HemisphereLight(
+  0xffffff,
+  0x444444,
+  2
+);
+
+scene.add(ambientLight);
+
+
+const directionalLight = new THREE.DirectionalLight(
+  0xffffff,
+  3
+);
+
+directionalLight.position.set(
+  10,
+  20,
+  10
+);
+
+directionalLight.castShadow = true;
+
+scene.add(directionalLight);
+
+
+const fillLight = new THREE.DirectionalLight(
+  0x88aaff,
+  1
+);
+
+fillLight.position.set(
+  -10,
+  8,
+  -10
+);
+
+scene.add(fillLight);
+
+
+// ------------------------------------
+// Grid
+// ------------------------------------
+
+const grid = new THREE.GridHelper(
+  100,
+  100,
+  0x555555,
+  0x333333
+);
+
+scene.add(grid);
+
+
+// ------------------------------------
+// Load Blender GLB
+// ------------------------------------
+
+const loader = new GLTFLoader();
+
+// Put cse_lab.glb beside this HTML file
+const modelPath = "./cse_lab.glb";
+
+loader.load(
+
+  modelPath,
+
+  function (gltf) {
+
+    const model = gltf.scene;
+
+    scene.add(model);
+
+
+    // Enable shadows
+    model.traverse(function (object) {
+
+      if (object.isMesh) {
+
+        object.castShadow = true;
+
+        object.receiveShadow = true;
+
+      }
+
+    });
+
+
+    // --------------------------------
+    // Automatically center model
+    // --------------------------------
+
+    const box = new THREE.Box3()
+      .setFromObject(model);
+
+    const center = box.getCenter(
+      new THREE.Vector3()
+    );
+
+    const size = box.getSize(
+      new THREE.Vector3()
+    );
+
+    model.position.x -= center.x;
+    model.position.y -= box.min.y;
+    model.position.z -= center.z;
+
+
+    // --------------------------------
+    // Automatically fit camera
+    // --------------------------------
+
+    const maxSize = Math.max(
+      size.x,
+      size.y,
+      size.z
+    );
+
+    const distance =
+      maxSize * 0.8;
+
+    camera.position.set(
+      distance,
+      distance * 0.7,
+      distance
+    );
+
+    camera.near = maxSize / 100;
+    camera.far = maxSize * 100;
+
+    camera.updateProjectionMatrix();
+
+
+    controls.target.set(
+      0,
+      size.y / 2,
+      0
+    );
+
+    controls.update();
+
+
+    document.getElementById(
+      "loading"
+    ).style.display = "none";
+
+  },
+
+  function (xhr) {
+
+    if (xhr.total) {
+
+      const percent =
+        (xhr.loaded / xhr.total) * 100;
+
+      document.getElementById(
+        "loading"
+      ).textContent =
+        "Loading CSE Lab... " +
+        percent.toFixed(0) +
+        "%";
+
+    }
+
+  },
+
+  function (error) {
+
+    console.error(error);
+
+    document.getElementById(
+      "loading"
+    ).textContent =
+      "Failed to load cse_lab.glb";
+
+  }
+
+);
+
+
+// ------------------------------------
+// Window resize
+// ------------------------------------
+
+window.addEventListener(
+  "resize",
+  function () {
+
+    camera.aspect =
+      window.innerWidth /
+      window.innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+      window.innerWidth,
+      window.innerHeight
+    );
+
+  }
+);
+
+
+// ------------------------------------
+// Animation
+// ------------------------------------
+
+function animate() {
+
+  requestAnimationFrame(animate);
+
+  controls.update();
+
+  renderer.render(
+    scene,
+    camera
+  );
+
+}
+
+animate();
+
+</script>
+
+</body>
+</html>
